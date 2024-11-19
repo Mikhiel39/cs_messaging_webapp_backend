@@ -3,9 +3,9 @@ const { Schema, default: mongoose } = require("mongoose");
 const messageSchema = new Schema(
   {
     senderType: { type: String, enum: ["agent", "user"], required: true },
-    senderId: { type: Number, required: true },
+    senderId: { type: String, required: true },
     chatId: {
-      type: Number,
+      type: String,
       required: true,
     },
     message: { type: String, required: true },

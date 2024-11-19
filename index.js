@@ -26,10 +26,10 @@ const chatsRouter = require("./routes/chats")(io);
 const agentsRouter = require("./routes/agent");
 const messagesRouter = require("./routes/message");
 
-app.use("/users", usersRouter);
-app.use("/chats", chatsRouter);
-app.use("/agents", agentsRouter);
-app.use("/messages", messagesRouter);
+app.use("/api/users", usersRouter);
+app.use("/api/chats", chatsRouter);
+app.use("/api/agents", agentsRouter);
+app.use("/api/messages", messagesRouter);
 
 io.on("connection", (socket) => {
   console.log("connected socket");
