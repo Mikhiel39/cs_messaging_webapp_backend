@@ -1,33 +1,42 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const auth = require("../middleware/auth");
-let Agent = require("../models/agent");
-let Chat = require("../models/chats");
 const bcrypt = require("bcrypt");
+const auth = require("../middleware/auth");
+const Agent = require("../models/agent");
+const Chat = require("../models/chats");
 
 const router = express.Router();
 
 // Get all agents
-router.route("/").get((req, res) => {
-  Agent.find()
-    .then((agents) => res.json(agents))
-    .catch((err) => res.status(400).json("Error: " + err));
+router.get("/", auth, async (req, res) => {
+  try {
+    const agents = await Agent.find();
+    res.json(agents);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // Get a single agent by ID
-router.route("/:id").get((req, res) => {
-  Agent.findOne({ id: req.params.id })
-    .then((agent) => res.json(agent))
-    .catch((err) => res.status(400).json("Error: " + err));
+router.get("/:id", auth, async (req, res) => {
+  try {
+    const agent = await Agent.findOne({ id: req.params.id });
+    if (!agent) {
+      return res.status(404).json({ error: "Agent not found" });
+    }
+    res.json(agent);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // Agent login
-router.route("/login").post(async (req, res) => {
+router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   try {
     const agent = await Agent.findOne({ email });
-    if (!agent || !(await agent.isPasswordValid(password))) {
+    if (!agent || !(await bcrypt.compare(password, agent.password))) {
       return res.status(400).json({ error: "Invalid email or password" });
     }
 
@@ -36,28 +45,28 @@ router.route("/login").post(async (req, res) => {
     });
     res.json({ token, agent });
   } catch (err) {
-    res.status(500).json("Error: " + err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// Create a new agent (if not exists) on login
+// Create a new agent
+router.post("/create", auth, async (req, res) => {
+  const { id, email, password } = req.body;
 
-router.route("/create").post(async (req, res) => {
-  const {id,email,password} = req.body;
-  // console.log(req.body)
   try {
-    //Check if the agent already exists
     const existingAgent = await Agent.findOne({ email });
-    if (existingAgent)
-      return res.status(400).json("Error: Agent already exists");
-    // console.log(id+" "+email+" "+password);
-    if (!id|| !email || !password)
-      return res.status(400).json("Error: id, Email and password are required");
+    if (existingAgent) {
+      return res.status(400).json({ error: "Agent already exists" });
+    }
 
-    // Hash the password
+    if (!id || !email || !password) {
+      return res
+        .status(400)
+        .json({ error: "ID, email, and password are required" });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create a new agent
     const newAgent = new Agent({
       id,
       email,
@@ -65,47 +74,15 @@ router.route("/create").post(async (req, res) => {
       assignedChats: [],
     });
 
-    // Save the agent to the database
     await newAgent.save();
     res.status(201).json(newAgent);
   } catch (err) {
-    res.status(500).json("Error: " + err);
-  }
-});
-
-
-// Self-assign a chat
-router.route("/self-assign/:chatId").post(auth, async (req, res) => {
-  const { chatId } = req.params;
-  const agentId = req.user.id;
-
-  try {
-    const chat = await Chat.findOneAndUpdate(
-      { id: chatId, assigned: false },
-      { assigned: true },
-      { new: true }
-    );
-
-    if (!chat) {
-      return res
-        .status(404)
-        .json({ error: "Chat not available for assignment" });
-    }
-
-    const agent = await Agent.findOneAndUpdate(
-      { id: agentId },
-      { $push: { assignedChats: chatId } },
-      { new: true }
-    );
-
-    res.json({ agent, chat });
-  } catch (err) {
-    res.status(500).json("Error: " + err);
+    res.status(500).json({ error: err.message });
   }
 });
 
 // Get all assigned chats for an agent
-router.route("/:id/chats").get(auth, async (req, res) => {
+router.get("/:id/chats", auth, async (req, res) => {
   const agentId = req.params.id;
 
   try {
@@ -117,7 +94,7 @@ router.route("/:id/chats").get(auth, async (req, res) => {
     const assignedChats = await Chat.find({ id: { $in: agent.assignedChats } });
     res.json(assignedChats);
   } catch (err) {
-    res.status(500).json("Error: " + err);
+    res.status(500).json({ error: err.message });
   }
 });
 

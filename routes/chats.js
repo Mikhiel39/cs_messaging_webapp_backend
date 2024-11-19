@@ -1,32 +1,36 @@
 const router = require("express").Router();
+const bcrypt = require("bcrypt");
+const { v4: uuidv4 } = require("uuid"); // For generating unique IDs
 const Agent = require("../models/agent");
 const Chat = require("../models/chats");
+const User = require("../models/users");
+const auth = require("../middleware/auth");
 const Message = require("../models/message");
 
 const chatsRouter = (io) => {
   // Get all chats
-  router.route("/").get((req, res) => {
+  router.route("/").get(auth, (req, res) => {
     Chat.find()
       .then((chats) => res.json(chats))
       .catch((err) => res.status(400).json("Error: " + err));
   });
 
   // Get a specific chat by ID
-  router.route("/:id").get((req, res) => {
+  router.route("/:id").get(auth, (req, res) => {
     Chat.findOne({ id: req.params.id })
       .then((chat) => res.json(chat))
       .catch((err) => res.status(400).json("Error: " + err));
   });
 
   // Assign a chat to an agent
-  router.route("/assign/:id").post((req, res) => {
+  router.route("/assign/:id").post(auth, (req, res) => {
     const chatId = req.params.id;
     const agentId = req.body.id;
 
     Chat.findOneAndUpdate(
       { id: chatId, assigned: false },
       { assigned: true },
-      { returnOriginal: false }
+      { new: true }
     )
       .then((updatedChat) => {
         if (!updatedChat) {
@@ -44,7 +48,7 @@ const chatsRouter = (io) => {
   });
 
   // Self-assign an unassigned chat
-  router.route("/self-assign/:id").post((req, res) => {
+  router.route("/self-assign/:id").post(auth, (req, res) => {
     const chatId = req.params.id;
     const agentId = req.body.id;
 
@@ -69,38 +73,28 @@ const chatsRouter = (io) => {
   });
 
   // Get all messages for a chat
-  router.route("/:id/messages").get((req, res) => {
+  router.route("/:id/messages").get(auth, (req, res) => {
     Message.find({ chatId: req.params.id })
       .then((messages) => res.json(messages))
       .catch((err) => res.status(400).json("Error: " + err));
   });
 
-  const { v4: uuidv4 } = require("uuid"); // For generating unique IDs
-
-  router.route("/messages/agent").post(async (req, res) => {
+  // Add a new message from an agent
+  router.route("/messages/agent").post(auth, async (req, res) => {
     try {
-      const { message, chatId: providedChatId } = req.body;
+      const { message, chatId } = req.body;
 
       if (!message) {
         return res.status(400).json("Error: Message content is required.");
       }
 
-      // Validate or generate a unique `chatId`
-      let chatId = providedChatId;
-      if (!chatId) {
-        chatId = uuidv4(); // Generate a unique ID for the chat if not provided
-      }
-
-      // Check if the chat exists
       const chatExists = await Chat.findOne({ id: chatId });
       if (!chatExists) {
-        return res.status(400).json("Error: Message not found.");
+        return res.status(400).json("Error: Chat not found.");
       }
 
-      // Create a unique `senderId`
-      const senderId = uuidv4(); // Generate a unique ID for the sender
+      const senderId = uuidv4();
 
-      // Create a new message
       const newMessage = new Message({
         senderType: "agent",
         senderId,
@@ -108,10 +102,8 @@ const chatsRouter = (io) => {
         message,
       });
 
-      // Save the message to the database
       await newMessage.save();
 
-      // Emit the new message to all connected clients
       io.to(chatId).emit("new_message", newMessage);
 
       res.status(201).json({ message: "Message added!", newMessage });
@@ -121,7 +113,8 @@ const chatsRouter = (io) => {
     }
   });
 
-  router.route("/messages/user").post(async (req, res) => {
+  // Add a new message from a user
+  router.route("/messages/user").post(auth, async (req, res) => {
     try {
       const { message, chatId: providedChatId } = req.body;
 
@@ -129,23 +122,25 @@ const chatsRouter = (io) => {
         return res.status(400).json("Error: Message content is required.");
       }
 
-      // Validate or generate a unique `chatId`
       let chatId = providedChatId;
       if (!chatId) {
-        chatId = uuidv4(); // Generate a unique ID for the chat if not provided
-      }
-
-      // Check if the chat exists
-      const chatExists = await Chat.findOne({ id: chatId });
-      if (!chatExists) {
-        const newChat = new Chat({ id: chatId, assigned: false });
+        chatId = uuidv4();
+        const newChat = new Chat({
+          id: chatId,
+          assigned: false,
+          isUrgent: false,
+        });
         await newChat.save();
+
+        await User.findOneAndUpdate(
+          { id: req.body.id },
+          { $push: { chatID: chatId } },
+          { new: true }
+        );
       }
 
-      // Create a unique `senderId`
-      const senderId = uuidv4(); // Generate a unique ID for the sender
+      const senderId = uuidv4();
 
-      // Create a new message
       const newMessage = new Message({
         senderType: "user",
         senderId,
@@ -153,10 +148,8 @@ const chatsRouter = (io) => {
         message,
       });
 
-      // Save the message to the database
       await newMessage.save();
 
-      // Emit the new message to all connected clients
       io.to(chatId).emit("new_message", newMessage);
 
       res.status(201).json({ message: "Message added!", newMessage });
@@ -166,24 +159,23 @@ const chatsRouter = (io) => {
     }
   });
 
-  router.route("/create").post(async (req, res) => {
+  // Create a new user
+  router.route("/create").post(auth, async (req, res) => {
     const { id, email, password } = req.body;
-    // console.log(req.body);
+
     try {
-      //Check if the agent already exists
       const existingUser = await User.findOne({ email });
       if (existingUser)
-        return res.status(400).json("Error: Agent already exists");
-      // console.log(id+" "+email+" "+password);
-      if (!id || !email || !password)
+        return res.status(400).json("Error: User already exists");
+
+      if (!id || !email || !password) {
         return res
           .status(400)
-          .json("Error: id, Email and password are required");
+          .json("Error: ID, email, and password are required.");
+      }
 
-      // Hash the password
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Create a new agent
       const newUser = new User({
         id,
         email,
@@ -191,7 +183,6 @@ const chatsRouter = (io) => {
         chatID: [],
       });
 
-      // Save the agent to the database
       await newUser.save();
       res.status(201).json(newUser);
     } catch (err) {
@@ -199,10 +190,8 @@ const chatsRouter = (io) => {
     }
   });
 
-
-
   // Search for messages in a chat
-  router.route("/search").get((req, res) => {
+  router.route("/search").get(auth, (req, res) => {
     const query = req.query.q || "";
 
     Message.find({
@@ -212,7 +201,7 @@ const chatsRouter = (io) => {
       .catch((err) => res.status(400).json("Error: " + err));
   });
 
-  // Get urgent messages for a chat
+  // Get urgent messages
   router.route("/urgent").get((req, res) => {
     Message.find({ isUrgent: true })
       .then((urgentMessages) => res.json(urgentMessages))

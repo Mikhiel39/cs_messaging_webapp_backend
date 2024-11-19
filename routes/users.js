@@ -1,5 +1,4 @@
 const router = require("express").Router();
-const Chat = require("../models/chats");
 const User = require("../models/users");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");

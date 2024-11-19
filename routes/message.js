@@ -1,19 +1,24 @@
 const express = require("express");
 const Message = require("../models/message");
+const Chat = require("../models/chats");
 const auth = require("../middleware/auth");
 
 const router = express.Router();
 
 // 1. Get All Messages
-router.get("/", (req, res) => {
+router.get("/", auth, (req, res) => {
   Message.find()
     .then((messages) => res.json(messages))
     .catch((err) => res.status(400).json("Error: " + err));
 });
 
 // 2. Create a New Message
-router.post("/", (req, res) => {
+router.post("/", auth, (req, res) => {
   const { senderType, senderId, chatId, message, isUrgent = false } = req.body;
+
+  if (!senderType || !senderId || !chatId || !message) {
+    return res.status(400).json("Error: All fields are required.");
+  }
 
   const newMessage = new Message({
     senderType,
@@ -25,7 +30,7 @@ router.post("/", (req, res) => {
 
   newMessage
     .save()
-    .then(() => res.json("Message added!"))
+    .then(() => res.status(201).json({ message: "Message added!" }))
     .catch((err) => res.status(400).json("Error: " + err));
 });
 
@@ -36,56 +41,56 @@ router.patch("/:id/mark-urgent", auth, (req, res) => {
     { $set: { isUrgent: true } },
     { new: true }
   )
-    .then((updatedMessage) => res.json(updatedMessage))
+    .then((updatedMessage) => {
+      if (!updatedMessage) {
+        return res.status(404).json("Error: Message not found.");
+      }
+      res.json(updatedMessage);
+    })
     .catch((err) => res.status(400).json("Error: " + err));
 });
 
-// 4. Search Messages
-router.get("/search", (req, res) => {
-  const { query } = req.query;
-
-  Message.find({ message: { $regex: query, $options: "i" } })
-    .then((messages) => res.json(messages))
-    .catch((err) => res.status(400).json("Error: " + err));
-});
-
-// 5. Get Messages by Chat ID
+// 4. Get Messages by Chat ID
 router.get("/chat/:chatId", (req, res) => {
   Message.find({ chatId: req.params.chatId })
-    .then((messages) => res.json(messages))
-    .catch((err) => res.status(400).json("Error: " + err));
-});
-
-// 6. Get Urgent Messages
-router.get("/urgent", (req, res) => {
-  Message.find({ isUrgent: true })
-    .then((urgentMessages) => res.json(urgentMessages))
-    .catch((err) => res.status(400).json("Error: " + err));
-});
-
-// 7. Use a Canned Message
-router.post("/canned", auth, (req, res) => {
-  const { senderType, senderId, chatId, cannedMessageId } = req.body;
-
-  // Assuming a `CannedMessage` model exists
-  const CannedMessage = require("../models/cannedMessage");
-
-  CannedMessage.findById(cannedMessageId)
-    .then((cannedMessage) => {
-      if (!cannedMessage)
-        return res.status(404).json("Canned message not found");
-
-      const newMessage = new Message({
-        senderType,
-        senderId,
-        chatId,
-        message: cannedMessage.content,
-      });
-
-      return newMessage.save();
+    .then((messages) => {
+      if (!messages.length) {
+        return res.status(404).json("Error: No messages found for this chat.");
+      }
+      res.json(messages);
     })
-    .then(() => res.json("Canned message sent!"))
     .catch((err) => res.status(400).json("Error: " + err));
+});
+
+// 5. Use a Canned Message
+router.post("/canned", auth, async (req, res) => {
+  try {
+    const { senderType, senderId, chatId, cannedMessageId } = req.body;
+
+    if (!senderType || !senderId || !chatId || !cannedMessageId) {
+      return res.status(400).json("Error: All fields are required.");
+    }
+
+    // Assuming a `CannedMessage` model exists
+    const CannedMessage = require("../models/cannedMessage");
+
+    const cannedMessage = await CannedMessage.findById(cannedMessageId);
+    if (!cannedMessage) {
+      return res.status(404).json("Error: Canned message not found.");
+    }
+
+    const newMessage = new Message({
+      senderType,
+      senderId,
+      chatId,
+      message: cannedMessage.content,
+    });
+
+    await newMessage.save();
+    res.status(201).json({ message: "Canned message sent!" });
+  } catch (err) {
+    res.status(500).json("Error: " + err.message);
+  }
 });
 
 module.exports = router;
