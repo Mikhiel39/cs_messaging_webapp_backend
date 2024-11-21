@@ -14,6 +14,7 @@ Both server & frontend App are hosted on:
 
 - client: [https://cs-messaging-webapp-frontend.vercel.app](https://cs-messaging-webapp-frontend.vercel.app)
 - server: [https://cs-messaging-webapp-backend.onrender.com](https://cs-messaging-webapp-backend.onrender.com)
+- video: [https://youtu.be/LZ6u1BgyWbs](https://youtu.be/LZ6u1BgyWbs)
 
 ### Running Locally
 
