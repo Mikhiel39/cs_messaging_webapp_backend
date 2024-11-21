@@ -11,7 +11,7 @@ It's a real-time chat application for multiple agents who provide support to mul
 
 Both server & frontend App are hosted on:
 
-- client: [https://admirable-caramel-5b6f46.netlify.app](https://admirable-caramel-5b6f46.netlify.app)
+- client: [cs-messaging-webapp-frontend-hs9ikli9d.vercel.app](cs-messaging-webapp-frontend-hs9ikli9d.vercel.app)
 - server: [https://cs-mesaging-app.onrender.com](https://cs-mesaging-app.onrender.com)
 - postman APIs collection: [https://www.postman.com/...](https://www.postman.com/planetary-equinox-821652/workspace/branch-assignment-by-rachit-goel/collection/19949199-eb06d1c9-411a-4dc4-9798-f9d51adc7a9c?action=share&creator=19949199) You can set environment as heroku server or local server.
 
