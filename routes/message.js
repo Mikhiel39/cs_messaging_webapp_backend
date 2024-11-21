@@ -1,95 +1,67 @@
-const express = require("express");
-const Message = require("../models/message");
-const Chat = require("../models/chats");
-const auth = require("../middleware/auth");
+const router = require("express").Router();
+const Message = require("../models/Message");
+const Conversation = require("../models/Conversation");
+const {urgentWords} = require("../utils/urgentWords")
+//add
 
-const router = express.Router();
-
-// 1. Get All Messages
-router.get("/", auth, (req, res) => {
-  Message.find()
-    .then((messages) => res.json(messages))
-    .catch((err) => res.status(400).json("Error: " + err));
-});
-
-// 2. Create a New Message
-router.post("/", auth, (req, res) => {
-  const { senderType, senderId, chatId, message, isUrgent = false } = req.body;
-
-  if (!senderType || !senderId || !chatId || !message) {
-    return res.status(400).json("Error: All fields are required.");
+router.post("/", async (req, res) => {
+  const msgBody = {
+    text: req.body.text,
+    isAgent: req.body.isAgent,
+    conversationId: req.body.conversationId
   }
+  const newMessage = new Message(msgBody);
 
-  const newMessage = new Message({
-    senderType,
-    senderId,
-    chatId,
-    message,
-    isUrgent,
-  });
-
-  newMessage
-    .save()
-    .then(() => res.status(201).json({ message: "Message added!" }))
-    .catch((err) => res.status(400).json("Error: " + err));
-});
-
-// 3. Mark a Message as Urgent
-router.patch("/:id/mark-urgent", auth, (req, res) => {
-  Message.findByIdAndUpdate(
-    req.params.id,
-    { $set: { isUrgent: true } },
-    { new: true }
-  )
-    .then((updatedMessage) => {
-      if (!updatedMessage) {
-        return res.status(404).json("Error: Message not found.");
-      }
-      res.json(updatedMessage);
-    })
-    .catch((err) => res.status(400).json("Error: " + err));
-});
-
-// 4. Get Messages by Chat ID
-router.get("/chat/:chatId", (req, res) => {
-  Message.find({ chatId: req.params.chatId })
-    .then((messages) => {
-      if (!messages.length) {
-        return res.status(404).json("Error: No messages found for this chat.");
-      }
-      res.json(messages);
-    })
-    .catch((err) => res.status(400).json("Error: " + err));
-});
-
-// 5. Use a Canned Message
-router.post("/canned", auth, async (req, res) => {
   try {
-    const { senderType, senderId, chatId, cannedMessageId } = req.body;
+    var savedMessage = await newMessage.save();
 
-    if (!senderType || !senderId || !chatId || !cannedMessageId) {
-      return res.status(400).json("Error: All fields are required.");
+    if(req.body.fm!==undefined){
+      if (urgentWords.some(v => req.body.text.includes(v))){
+        const updatedConversation = await Conversation.findByIdAndUpdate(
+        req.body.conversationId,
+        {
+          isUrgent: true,
+        }
+       );
+      savedMessage = {...savedMessage._doc, 'isUrgent' : true};
+      }else{
+              savedMessage = {...savedMessage._doc, 'isUrgent' : false};
+
+      }
+      
     }
-
-    // Assuming a `CannedMessage` model exists
-    const CannedMessage = require("../models/cannedMessage");
-
-    const cannedMessage = await CannedMessage.findById(cannedMessageId);
-    if (!cannedMessage) {
-      return res.status(404).json("Error: Canned message not found.");
-    }
-
-    const newMessage = new Message({
-      senderType,
-      senderId,
-      chatId,
-      message: cannedMessage.content,
-    });
-
-    await newMessage.save();
-    res.status(201).json({ message: "Canned message sent!" });
+    res.status(200).json(savedMessage);
+    console.log("post: message/ call success");
   } catch (err) {
-    res.status(500).json("Error: " + err.message);
+    console.log(err)
+    res.status(500).json(err);
+  }
+});
+
+//get
+
+router.get("/:conversationId", async (req, res) => {
+  try {
+    const messages = await Message.find({
+      conversationId: req.params.conversationId,
+    });
+    res.status(200).json(messages);
+    console.log("get: message/:conversationId call success");
+  } catch (err) {
+    res.status(500).json(err);
+  }
+});
+
+router.post("/search/", async (req, res) => {
+  try {
+    var textSearch = await Message.find({
+      "$or":[{text:{$regex: req.body.searchText}}]
+    }).populate("conversationId").exec();
+
+    res.status(200).json(textSearch);
+    console.log("get: message/search call success");
+  } catch (err) {
+    res.status(500).json(err);
   }
 });
 

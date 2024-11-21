@@ -1,17 +1,20 @@
-const { Schema, default: mongoose } = require("mongoose");
+const mongoose = require("mongoose");
+const { Schema } = mongoose;
 
-const messageSchema = new Schema(
+const MessageSchema = new mongoose.Schema(
   {
-    senderType: { type: String, enum: ["agent", "user"], required: true },
-    senderId: { type: String, required: true },
-    chatId: {
-      type: String,
-      required: true,
+    conversationId: {
+      type: String, required: true,
+      ref: "Conversation",
     },
-    message: { type: String, required: true },
+    text: {
+      type: String,
+    },
+    isAgent: {
+      type: Boolean, required: true,
+    },
   },
   { timestamps: true }
 );
 
-const Message = mongoose.model("Message", messageSchema);
-module.exports = Message;
+module.exports = mongoose.model("Message", MessageSchema);
