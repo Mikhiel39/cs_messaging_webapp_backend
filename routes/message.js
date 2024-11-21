@@ -1,5 +1,5 @@
 const router = require("express").Router();
-const Message = require("../models/Message");
+const Message = require("../models/message");
 const Conversation = require("../models/Conversation");
 const {urgentWords} = require("../utils/urgentWords")
 //add

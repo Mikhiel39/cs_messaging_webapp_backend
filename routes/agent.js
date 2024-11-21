@@ -1,5 +1,5 @@
 const router = require("express").Router();
-const Agent = require("../models/Agent");
+const Agent = require("../models/agent");
 
 //add new agent
 
