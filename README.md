@@ -12,7 +12,7 @@ It's a real-time chat application for multiple agents who provide support to mul
 
 Both server & frontend App are hosted on:
 
-- client: [cs-messaging-webapp-frontend-hs9ikli9d.vercel.app](cs-messaging-webapp-frontend-hs9ikli9d.vercel.app)
+- client: [https://cs-messaging-webapp-frontend.vercel.app](https://cs-messaging-webapp-frontend.vercel.app)
 - server: [https://cs-messaging-webapp-backend.onrender.com](https://cs-messaging-webapp-backend.onrender.com)
 
 ### Running Locally
